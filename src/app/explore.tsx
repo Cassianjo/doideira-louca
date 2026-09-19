@@ -1,180 +1,289 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+type Personagem = {
+  nome: string;
+  vidaAtual: number;
+  vidaMaxima: number;
+  ataque: number;
+  defesa: number;
+};
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
-  const theme = useTheme();
-
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
+export default function App() {
+  const [jogador, setJogador] = useState<Personagem>({
+    nome: 'Guerreiro Claude',
+    vidaAtual: 100,
+    vidaMaxima: 100,
+    ataque: 25,
+    defesa: 10,
   });
 
+  const [inimigo, setInimigo] = useState<Personagem>({
+    nome: 'Dragão de Código',
+    vidaAtual: 120,
+    vidaMaxima: 120,
+    ataque: 22,
+    defesa: 15,
+  });
+
+  const [historico, setHistorico] = useState<string>('Sua vez! Escolha uma ação.');
+  const [turnoDoJogador, setTurnoDoJogador] = useState<boolean>(true);
+
+  // FUNÇÃO: Faz o inimigo atacar de volta de forma automática
+  const executarTurnoDoInimigo = (vidaAtualizadaInimigo: number) => {
+    // Se o inimigo morreu, não faz nada (Evita que o monstro ataque depois de morto)
+    if (vidaAtualizadaInimigo <= 0) return;
+
+    setTimeout(() => {
+      let danoDoInimigo = inimigo.ataque - jogador.defesa;
+      if (danoDoInimigo < 1) danoDoInimigo = 1;
+
+      setJogador((dadosAntigos) => {
+        const novaVida = Math.max(0, dadosAntigos.vidaAtual - danoDoInimigo);
+        return { ...dadosAntigos, vidaAtual: novaVida };
+      });
+
+      setHistorico(`🔥 ${inimigo.nome} cuspiu fogo e causou ${danoDoInimigo} de dano em você!`);
+      setTurnoDoJogador(true);
+    }, 1500);
+  };
+
+  const atacarInimigo = () => {
+    let danoCausado = jogador.ataque - inimigo.defesa;
+    if (danoCausado < 1) danoCausado = 1;
+
+    const novaVidaInimigo = Math.max(0, inimigo.vidaAtual - danoCausado);
+
+    setInimigo((dadosAntigos) => ({
+      ...dadosAntigos,
+      vidaAtual: novaVidaInimigo,
+    }));
+
+    setHistorico(`⚔️ ${jogador.nome} atacou ${inimigo.nome} e causou ${danoCausado} de dano!`);
+    setTurnoDoJogador(false);
+
+    executarTurnoDoInimigo(novaVidaInimigo);
+  };
+
+  const curarJogador = () => {
+    const pontosCura = 30;
+    const novaVidaJogador = Math.min(jogador.vidaMaxima, jogador.vidaAtual + pontosCura);
+
+    setJogador((dadosAntigos) => ({
+      ...dadosAntigos,
+      vidaAtual: novaVidaJogador,
+    }));
+
+    setHistorico(`❤️ ${jogador.nome} usou magia de cura e recuperou ${pontosCura} de HP!`);
+    setTurnoDoJogador(false);
+
+    executarTurnoDoInimigo(inimigo.vidaAtual);
+  };
+
+  // NOVO - FUNÇÃO: Reseta o jogo para o estado inicial
+  const reiniciarJogo = () => {
+    setJogador((antigo) => ({ ...antigo, vidaAtual: antigo.vidaMaxima }));
+    setInimigo((antigo) => ({ ...antigo, vidaAtual: antigo.vidaMaxima }));
+    setHistorico('Nova batalha iniciada! Sua vez.');
+    setTurnoDoJogador(true);
+  };
+
+  // NOVO - Variáveis de verificação para saber se o jogo acabou
+  const vitoria = inimigo.vidaAtual <= 0;
+  const derrota = jogador.vidaAtual <= 0;
+  const jogoAcabou = vitoria || derrota;
+
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <View style={styles.container}>
+      <StatusBar style="light" />
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+      {/* ÁREA DO TOPO: Inimigo */}
+      <View style={styles.areaInimigo}>
+        <Text style={styles.emojiGeral}>{vitoria ? '💀' : '🐲'}</Text>
+        <Text style={styles.nomeInimigo}>{inimigo.nome}</Text>
+        <View style={styles.barraVidaFundo}>
+          <View style={[styles.barraVidaInimigo, { width: `${(inimigo.vidaAtual / inimigo.vidaMaxima) * 100}%` }]} />
+        </View>
+        <Text style={styles.textoVida}>{inimigo.vidaAtual} / {inimigo.vidaMaxima} HP</Text>
+      </View>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+      {/* ÁREA DO MEIO: Caixa de Histórico de Mensagens */}
+      <View style={styles.caixaHistorico}>
+        <Text style={styles.textoHistorico}>{historico}</Text>
+      </View>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+      {/* ÁREA DO MEIO/BAIXO: Jogador */}
+      <View style={styles.areaJogador}>
+        <Text style={styles.emojiGeral}>{derrota ? '🪦' : '⚔️'}</Text>
+        <Text style={styles.nomeJogador}>{jogador.nome}</Text>
+        <View style={styles.barraVidaFundo}>
+          <View style={[styles.barraVidaJogador, { width: `${(jogador.vidaAtual / jogador.vidaMaxima) * 100}%` }]} />
+        </View>
+        <Text style={styles.textoVida}>{jogador.vidaAtual} / {jogador.vidaMaxima} HP</Text>
+      </View>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+      {/* ÁREA DA BASE: Renderização Condicional */}
+      {/* Se o jogo acabou, exibe a tela de Fim de Jogo. Caso contrário, exibe os botões normais */}
+      {jogoAcabou ? (
+        <View style={styles.caixaFimJogo}>
+          <Text style={styles.textoFimJogo}>
+            {vitoria ? '🎉 Você Venceu!' : '💀 Fim de Jogo!'}
+          </Text>
+          <TouchableOpacity style={styles.botaoReiniciar} onPress={reiniciarJogo}>
+            <Text style={styles.textoBotao}>🔄 Jogar Novamente</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.areaBotoes}>
+          <TouchableOpacity 
+            style={[styles.botao, styles.botaoAtacar, !turnoDoJogador && styles.botaoDesativado]} 
+            activeOpacity={0.7}
+            onPress={atacarInimigo}
+            disabled={!turnoDoJogador}
+          >
+            <Text style={styles.textoBotao}>⚔️ Atacar</Text>
+          </TouchableOpacity>
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+          <TouchableOpacity 
+            style={[styles.botao, styles.botaoCurar, !turnoDoJogador && styles.botaoDesativado]} 
+            activeOpacity={0.7}
+            onPress={curarJogador}
+            disabled={!turnoDoJogador}
+          >
+            <Text style={styles.textoBotao}>❤️ Curar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
   container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
+    flex: 1,
+    backgroundColor: '#151517',
+    paddingTop: 50,
+    paddingBottom: 30,
   },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
-  },
-  centerText: {
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
+  areaInimigo: {
+    flex: 2,
     justifyContent: 'center',
-    gap: Spacing.one,
+    alignItems: 'center',
+    backgroundColor: '#221515',
+    marginHorizontal: 15,
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#4a1515',
+  },
+  caixaHistorico: {
+    backgroundColor: '#2c2c2e',
+    marginHorizontal: 15,
+    marginVertical: 10,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3a3a3c',
     alignItems: 'center',
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+  textoHistorico: {
+    color: '#e5e5ea',
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
   },
-  collapsibleContent: {
+  areaJogador: {
+    flex: 2,
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#151c22',
+    marginHorizontal: 15,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#15354a',
   },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
+  emojiGeral: {
+    fontSize: 40,
+    marginBottom: 5,
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  nomeInimigo: {
+    color: '#ff6b6b',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  nomeJogador: {
+    color: '#4dadff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  barraVidaFundo: {
+    width: '70%',
+    height: 14,
+    backgroundColor: '#333',
+    borderRadius: 7,
+    overflow: 'hidden',
+    marginBottom: 5,
+  },
+  barraVidaInimigo: {
+    height: '100%',
+    backgroundColor: '#e63946',
+  },
+  barraVidaJogador: {
+    height: '100%',
+    backgroundColor: '#2a9d8f',
+  },
+  textoVida: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  areaBotoes: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  botao: {
+    width: '40%',
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botaoAtacar: {
+    backgroundColor: '#e63946',
+  },
+  botaoCurar: {
+    backgroundColor: '#2a9d8f',
+  },
+  botaoDesativado: {
+    backgroundColor: '#3a3a3c',
+    opacity: 0.5,
+  },
+  textoBotao: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // NOVO - Estilos para a tela de fim de jogo
+  caixaFimJogo: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  textoFimJogo: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 15,
+  },
+  botaoReiniciar: {
+    backgroundColor: '#4dadff',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 8,
   },
 });
