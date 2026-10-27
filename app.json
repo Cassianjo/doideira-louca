@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "lula-me-beijou",
+    "name": "Brasa — Crônicas do Bosque",
     "slug": "lula-me-beijou",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lulamebeijou",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -28,7 +28,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#17171d",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

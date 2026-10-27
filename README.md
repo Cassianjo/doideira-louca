@@ -1,56 +1,56 @@
-# Welcome to your Expo app 👋
+# Brasa — Crônicas do Bosque
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+RPG de turno em React Native / Expo 57, TypeScript e Zustand. A aplicação funciona na web e usa componentes nativos para Android e iOS. O ZIP fornecido foi consultado como referência do protótipo; não substituímos o checkout por ele. O nome Brasa e os sprites desenhados em código são provisórios: o Figma não estava acessível durante a implementação.
 
-## Get started
+## Desenvolvimento
 
-1. Install dependencies
+Requer **Node 24** (o backend usa `node:sqlite`) e npm 11.
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```sh
+npm ci
+npm run backend
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Em outro terminal, na mesma pasta:
 
-### Other setup steps
+```sh
+npm run web -- --host localhost
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+A API usa a porta 3001; o Expo usa 8081. Para dispositivo físico, defina `EXPO_PUBLIC_API_URL=http://IP_DA_MAQUINA:3001` antes de iniciar o Expo. Em produção, aponte para a URL HTTPS da API. `CORS_ORIGINS` no backend recebe origens web permitidas, separadas por vírgula; o padrão aceita somente localhost e 127.0.0.1 na porta 8081. `PORT` e `RPG_DB` permitem alterar a porta e o caminho do banco. Não adicione segredos ao frontend.
 
-## Learn more
+## Jogar
 
-To learn more about developing your project with Expo, look at the following resources:
+- Entre com username de 3 a 20 letras, números ou `_`. Maiúsculas e minúsculas identificam o mesmo perfil.
+- Continue a aventura ou confirme uma nova jornada. O progresso anterior só será substituído ao salvar.
+- Mova com WASD, setas ou o controle de toque. O santuário e as árvores possuem colisões.
+- Aproxime-se do fantasma à direita para lutar. Ataque causa 23 de dano; poção recupera 35 HP; defender reduz o dano da próxima esquiva pela metade.
+- Na resposta do inimigo, controle o foguinho na arena por 5 segundos. Colisões causam dano com intervalo de invulnerabilidade.
+- A fogueira à esquerda recupera vida, repõe pelo menos 3 poções e salva. Também é possível salvar pelo botão no bosque. Vitórias salvam automaticamente; falhas de rede são exibidas, sem apagar o estado em memória.
+- A derrota devolve o personagem ao início do bosque. Novas batalhas reiniciam o inimigo. O progresso salvo inclui posição, vida, poções, vitórias e ouro; não inclui uma batalha em andamento.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Persistência e login
 
-## Join the community
+A API guarda perfis em SQLite (`backend/data/game.sqlite`, ignorado no Git), usa consultas parametrizadas, valida os campos e emite sessões de 24 horas para ler/escrever o progresso. Os dados sobrevivem à reinicialização do processo; mantenha o arquivo SQLite em volume persistente no deploy e faça backups.
 
-Join our community of developers creating universal apps.
+**Username sozinho é seleção de perfil, sem comprovação de identidade:** qualquer pessoa que conhece o nome pode entrar. Esse comportamento atende ao fluxo solicitado, mas não protege contas privadas. Para lançamento público, implementar autenticação real e limitação de tentativas. Logout descarta a sessão no cliente; salve antes de sair. O estado do jogo é controlado pelo cliente, sem proteção contra trapaça.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Rotas: `GET /health`, `POST /api/login` (`{username}`), `GET /api/progress` e `PUT /api/progress` (Bearer token e os seis campos de progresso).
+
+## Organização
+
+- `src/game/components/`: menu/login, gameplay, batalha, inventário, guia, controles, mapa e sprites.
+- `src/game/store.ts`: estado Zustand, navegação e comunicação com a API.
+- `src/game/model.ts`: progresso inicial e regras de colisão.
+- `backend/server.mjs`: servidor HTTP e SQLite sem dependências externas.
+- `tests/`: persistência após reiniciar, isolamento de perfis, validação, sessão, CORS e colisões.
+
+## Verificação
+
+```sh
+npm test
+npm run typecheck
+EXPO_NO_TELEMETRY=1 CI=1 npm run build:web
+```
+
+O build gera `dist/`. Testar Android/iOS requer dispositivo ou emulador e não é substituído pelo build web. As interfaces e os sprites precisam ser comparados ao Figma quando o acesso estiver disponível.

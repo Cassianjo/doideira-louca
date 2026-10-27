@@ -49,7 +49,7 @@ class Inimigo extends Personagens {
 }
 
 class Npc extends Personagens {
-     meeting: string;
+     meeting: string = '';
 
      constructor(nome: string,vida: number, tipo: string, descricao: string, habilidade: number, nomehabilidade: string, ataque: number,defesa: number){
          super(nome, vida, tipo, descricao, habilidade, nomehabilidade, ataque, defesa); 

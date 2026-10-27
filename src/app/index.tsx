@@ -1,289 +1,309 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-
-type Personagem = {
-  nome: string;
-  vidaAtual: number;
-  vidaMaxima: number;
-  ataque: number;
-  defesa: number;
-};
-
+import { useEffect, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useGame } from "../game/store";
+import Menu from "../game/components/Menu";
+import Gameplay from "../game/components/Gameplay";
+import Battle from "../game/components/Battle";
+import Inventory from "../game/components/Inventory";
+import Guide from "../game/components/Guide";
+import PixelSprite from "../game/components/PixelSprite";
+import WorldMap from "../game/components/WorldMap";
+import { Button, palette, ui } from "../game/components/UI";
 export default function App() {
-  const [jogador, setJogador] = useState<Personagem>({
-    nome: 'Guerreiro Claude',
-    vidaAtual: 100,
-    vidaMaxima: 100,
-    ataque: 25,
-    defesa: 10,
-  });
-
-  const [inimigo, setInimigo] = useState<Personagem>({
-    nome: 'Dragão de Código',
-    vidaAtual: 120,
-    vidaMaxima: 120,
-    ataque: 22,
-    defesa: 15,
-  });
-
-  const [historico, setHistorico] = useState<string>('Sua vez! Escolha uma ação.');
-  const [turnoDoJogador, setTurnoDoJogador] = useState<boolean>(true);
-
-  // FUNÇÃO: Faz o inimigo atacar de volta de forma automática
-  const executarTurnoDoInimigo = (vidaAtualizadaInimigo: number) => {
-    // Se o inimigo morreu, não faz nada (Evita que o monstro ataque depois de morto)
-    if (vidaAtualizadaInimigo <= 0) return;
-
-    setTimeout(() => {
-      let danoDoInimigo = inimigo.ataque - jogador.defesa;
-      if (danoDoInimigo < 1) danoDoInimigo = 1;
-
-      setJogador((dadosAntigos) => {
-        const novaVida = Math.max(0, dadosAntigos.vidaAtual - danoDoInimigo);
-        return { ...dadosAntigos, vidaAtual: novaVida };
-      });
-
-      setHistorico(`🔥 ${inimigo.nome} cuspiu fogo e causou ${danoDoInimigo} de dano em você!`);
-      setTurnoDoJogador(true);
-    }, 1500);
-  };
-
-  const atacarInimigo = () => {
-    let danoCausado = jogador.ataque - inimigo.defesa;
-    if (danoCausado < 1) danoCausado = 1;
-
-    const novaVidaInimigo = Math.max(0, inimigo.vidaAtual - danoCausado);
-
-    setInimigo((dadosAntigos) => ({
-      ...dadosAntigos,
-      vidaAtual: novaVidaInimigo,
-    }));
-
-    setHistorico(`⚔️ ${jogador.nome} atacou ${inimigo.nome} e causou ${danoCausado} de dano!`);
-    setTurnoDoJogador(false);
-
-    executarTurnoDoInimigo(novaVidaInimigo);
-  };
-
-  const curarJogador = () => {
-    const pontosCura = 30;
-    const novaVidaJogador = Math.min(jogador.vidaMaxima, jogador.vidaAtual + pontosCura);
-
-    setJogador((dadosAntigos) => ({
-      ...dadosAntigos,
-      vidaAtual: novaVidaJogador,
-    }));
-
-    setHistorico(`❤️ ${jogador.nome} usou magia de cura e recuperou ${pontosCura} de HP!`);
-    setTurnoDoJogador(false);
-
-    executarTurnoDoInimigo(inimigo.vidaAtual);
-  };
-
-  // NOVO - FUNÇÃO: Reseta o jogo para o estado inicial
-  const reiniciarJogo = () => {
-    setJogador((antigo) => ({ ...antigo, vidaAtual: antigo.vidaMaxima }));
-    setInimigo((antigo) => ({ ...antigo, vidaAtual: antigo.vidaMaxima }));
-    setHistorico('Nova batalha iniciada! Sua vez.');
-    setTurnoDoJogador(true);
-  };
-
-  // NOVO - Variáveis de verificação para saber se o jogo acabou
-  const vitoria = inimigo.vidaAtual <= 0;
-  const derrota = jogador.vidaAtual <= 0;
-  const jogoAcabou = vitoria || derrota;
-
+  const g = useGame();
+  const { width } = useWindowDimensions();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const wide = mounted && width > 1000;
+  const nav = [
+    ["menu", "⌂", "Início"],
+    ["world", "◇", "Aventura"],
+    ["inventory", "▣", "Inventário"],
+    ["guide", "?", "Como jogar"],
+  ] as const;
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-
-      {/* ÁREA DO TOPO: Inimigo */}
-      <View style={styles.areaInimigo}>
-        <Text style={styles.emojiGeral}>{vitoria ? '💀' : '🐲'}</Text>
-        <Text style={styles.nomeInimigo}>{inimigo.nome}</Text>
-        <View style={styles.barraVidaFundo}>
-          <View style={[styles.barraVidaInimigo, { width: `${(inimigo.vidaAtual / inimigo.vidaMaxima) * 100}%` }]} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
+      <View style={styles.top}>
+        <View style={ui.row}>
+          <PixelSprite kind="flame" size={3} />
+          <View>
+            <Text
+              style={[
+                ui.text,
+                { letterSpacing: 4, fontWeight: "bold", fontSize: 17 },
+              ]}
+            >
+              BRASA
+            </Text>
+            <Text
+              style={[
+                ui.label,
+                { fontSize: 8, letterSpacing: 2, marginTop: 4 },
+              ]}
+            >
+              CRÔNICAS DO BOSQUE
+            </Text>
+          </View>
         </View>
-        <Text style={styles.textoVida}>{inimigo.vidaAtual} / {inimigo.vidaMaxima} HP</Text>
-      </View>
-
-      {/* ÁREA DO MEIO: Caixa de Histórico de Mensagens */}
-      <View style={styles.caixaHistorico}>
-        <Text style={styles.textoHistorico}>{historico}</Text>
-      </View>
-
-      {/* ÁREA DO MEIO/BAIXO: Jogador */}
-      <View style={styles.areaJogador}>
-        <Text style={styles.emojiGeral}>{derrota ? '🪦' : '⚔️'}</Text>
-        <Text style={styles.nomeJogador}>{jogador.nome}</Text>
-        <View style={styles.barraVidaFundo}>
-          <View style={[styles.barraVidaJogador, { width: `${(jogador.vidaAtual / jogador.vidaMaxima) * 100}%` }]} />
-        </View>
-        <Text style={styles.textoVida}>{jogador.vidaAtual} / {jogador.vidaMaxima} HP</Text>
-      </View>
-
-      {/* ÁREA DA BASE: Renderização Condicional */}
-      {/* Se o jogo acabou, exibe a tela de Fim de Jogo. Caso contrário, exibe os botões normais */}
-      {jogoAcabou ? (
-        <View style={styles.caixaFimJogo}>
-          <Text style={styles.textoFimJogo}>
-            {vitoria ? '🎉 Você Venceu!' : '💀 Fim de Jogo!'}
+        <View style={ui.row}>
+          <View style={{ width: 6, height: 6, backgroundColor: "#9daa8b" }} />
+          <Text style={ui.muted}>
+            {g.username ? `@${g.username}` : "UMA NOVA JORNADA"}
           </Text>
-          <TouchableOpacity style={styles.botaoReiniciar} onPress={reiniciarJogo}>
-            <Text style={styles.textoBotao}>🔄 Jogar Novamente</Text>
-          </TouchableOpacity>
         </View>
-      ) : (
-        <View style={styles.areaBotoes}>
-          <TouchableOpacity 
-            style={[styles.botao, styles.botaoAtacar, !turnoDoJogador && styles.botaoDesativado]} 
-            activeOpacity={0.7}
-            onPress={atacarInimigo}
-            disabled={!turnoDoJogador}
-          >
-            <Text style={styles.textoBotao}>⚔️ Atacar</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.botao, styles.botaoCurar, !turnoDoJogador && styles.botaoDesativado]} 
-            activeOpacity={0.7}
-            onPress={curarJogador}
-            disabled={!turnoDoJogador}
-          >
-            <Text style={styles.textoBotao}>❤️ Curar</Text>
-          </TouchableOpacity>
+      </View>
+      <View style={{ flex: 1, flexDirection: wide ? "row" : "column" }}>
+        <View
+          style={[
+            styles.sidebar,
+            !wide && {
+              width: "100%",
+              padding: 12,
+              flexDirection: "row",
+              borderRightWidth: 0,
+              borderBottomWidth: 1,
+              justifyContent: "space-around",
+            },
+          ]}
+        >
+          {wide && (
+            <Text style={[ui.label, { marginBottom: 30, paddingLeft: 16 }]}>
+              SUA JORNADA
+            </Text>
+          )}
+          {nav.map(([screen, icon, label], i) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: g.screen === screen }}
+              key={screen}
+              onPress={() =>
+                g.go(
+                  g.username ? screen : screen === "guide" ? "guide" : "menu",
+                )
+              }
+              style={({ hovered }: any) => [
+                styles.nav,
+                g.screen === screen && {
+                  backgroundColor: "#302a3b",
+                  borderLeftColor: palette.purple,
+                },
+                hovered && { backgroundColor: "#28242e" },
+                !wide && { padding: 8, gap: 5, flex: 1, justifyContent: "center" },
+              ]}
+            >
+              <Text
+                style={{
+                  color: g.screen === screen ? palette.purple : palette.muted,
+                  fontSize: 19,
+                }}
+              >
+                {icon}
+              </Text>
+              <Text
+                style={[
+                  ui.text,
+                  {
+                    fontSize: (!mounted || width < 500) ? 9 : 12,
+                    color: g.screen === screen ? palette.purple : palette.muted,
+                  },
+                ]}
+              >
+                {(!mounted || width < 500) ? ["Início", "Jogar", "Mochila", "Guia"][i] : label}
+              </Text>
+              {wide && (
+                <Text style={[ui.muted, { marginLeft: "auto", fontSize: 10 }]}>
+                  0{i + 1}
+                </Text>
+              )}
+            </Pressable>
+          ))}
+          {wide && (
+            <View style={{ marginTop: "auto", padding: 16, gap: 16 }}>
+              <View
+                style={{ width: 32, height: 1, backgroundColor: palette.line }}
+              />
+              <Text style={[ui.muted, { fontSize: 11 }]}>
+                Mesmo a menor chama{"\n"}afasta a escuridão.
+              </Text>
+              <Text style={ui.label}>✦ SIGA EM FRENTE</Text>
+            </View>
+          )}
         </View>
-      )}
-    </View>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, padding: wide ? 40 : (!mounted || width < 380) ? 10 : 20 }}
+        >
+          <View style={{ maxWidth: 1180, width: "100%", alignSelf: "center" }}>
+            <View
+              style={[
+                ui.row,
+                { marginBottom: 32, justifyContent: "space-between" },
+              ]}
+            >
+              <Text style={[ui.muted, { fontSize: 10 }]}>
+                O BOSQUE /{" "}
+                <Text style={{ color: palette.text }}>
+                  {g.screen === "menu"
+                    ? "INÍCIO"
+                    : g.screen === "world"
+                      ? "EXPLORAÇÃO"
+                      : g.screen === "battle"
+                        ? "COMBATE"
+                        : g.screen === "inventory"
+                          ? "INVENTÁRIO"
+                          : "GUIA"}
+                </Text>
+              </Text>
+              <Text style={[ui.label, { fontSize: 9 }]}>✦ RPG DE TURNO</Text>
+            </View>
+            <View
+              style={{
+                flexDirection: wide && g.screen === "menu" ? "row" : "column",
+                gap: 36,
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  maxWidth: g.screen === "menu" ? 560 : 800,
+                  width: "100%",
+                  alignSelf: "center",
+                }}
+              >
+                {g.screen === "menu" ? (
+                  <Menu />
+                ) : g.screen === "guide" ? (
+                  <Guide />
+                ) : !g.username ? (
+                  <Menu />
+                ) : g.screen === "world" ? (
+                  <Gameplay />
+                ) : g.screen === "battle" ? (
+                  <Battle />
+                ) : (
+                  <Inventory />
+                )}
+              </View>
+              {g.screen === "menu" && (
+                <View style={[styles.art, { flex: wide ? 1 : undefined }]}>
+                  <View
+                    style={[
+                      ui.row,
+                      { justifyContent: "space-between", marginBottom: 20 },
+                    ]}
+                  >
+                    <Text style={ui.label}>UM MUNDO À SUA ESPERA</Text>
+                    <Text style={{ color: palette.gold }}>✧</Text>
+                  </View>
+                  <WorldMap decorative />
+                  <View style={{ paddingVertical: 24, gap: 12 }}>
+                    <Text
+                      style={[ui.label, { color: palette.gold, fontSize: 9 }]}
+                    >
+                      CAPÍTULO I
+                    </Text>
+                    <Text style={[ui.title, { fontSize: 24 }]}>
+                      O chamado das cinzas
+                    </Text>
+                    <Text style={ui.muted}>
+                      Por trás das árvores, um antigo santuário guarda aquilo
+                      que o tempo esqueceu.
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      ui.row,
+                      {
+                        borderTopWidth: 1,
+                        borderColor: palette.line,
+                        paddingTop: 18,
+                        justifyContent: "space-between",
+                      },
+                    ]}
+                  >
+                    <Text style={[ui.muted, { fontSize: 10 }]}>
+                      EXPLORAR · LUTAR · DESCOBRIR
+                    </Text>
+                    <PixelSprite kind="sword" size={2} />
+                  </View>
+                </View>
+              )}
+            </View>
+            {g.username && g.screen !== "battle" && (
+              <View style={{ marginTop: 26, alignItems: "flex-start" }}>
+                <Button onPress={() => g.logout()}>Sair do perfil</Button>
+                <Text style={[ui.muted, { fontSize: 10, marginTop: 8 }]}>
+                  Salve no bosque antes de sair.
+                </Text>
+              </View>
+            )}
+            <View
+              style={[
+                ui.row,
+                {
+                  borderTopWidth: 1,
+                  borderColor: palette.line,
+                  marginTop: 40,
+                  paddingTop: 18,
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                },
+              ]}
+            >
+              <Text style={[ui.muted, { fontSize: 9, letterSpacing: 1 }]}>
+                BRASA © 2026 · FEITO DE PIXELS E CORAGEM
+              </Text>
+              <Text style={[ui.muted, { fontSize: 9 }]}>
+                A aventura vive em você. ✦
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#151517',
-    paddingTop: 50,
-    paddingBottom: 30,
+  top: {
+    minHeight: 92,
+    borderBottomWidth: 1,
+    borderColor: palette.line,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 28,
+    gap: 20,
   },
-  areaInimigo: {
-    flex: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#221515',
-    marginHorizontal: 15,
-    marginTop: 10,
-    borderRadius: 12,
+  sidebar: {
+    width: 220,
+    borderRightWidth: 1,
+    borderColor: palette.line,
+    padding: 20,
+    paddingTop: 36,
+    gap: 8,
+  },
+  nav: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    gap: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: "transparent",
+  },
+  art: {
     borderWidth: 1,
-    borderColor: '#4a1515',
-  },
-  caixaHistorico: {
-    backgroundColor: '#2c2c2e',
-    marginHorizontal: 15,
-    marginVertical: 10,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
-    alignItems: 'center',
-  },
-  textoHistorico: {
-    color: '#e5e5ea',
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  areaJogador: {
-    flex: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#151c22',
-    marginHorizontal: 15,
-    marginBottom: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#15354a',
-  },
-  emojiGeral: {
-    fontSize: 40,
-    marginBottom: 5,
-  },
-  nomeInimigo: {
-    color: '#ff6b6b',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  nomeJogador: {
-    color: '#4dadff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  barraVidaFundo: {
-    width: '70%',
-    height: 14,
-    backgroundColor: '#333',
-    borderRadius: 7,
-    overflow: 'hidden',
-    marginBottom: 5,
-  },
-  barraVidaInimigo: {
-    height: '100%',
-    backgroundColor: '#e63946',
-  },
-  barraVidaJogador: {
-    height: '100%',
-    backgroundColor: '#2a9d8f',
-  },
-  textoVida: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  areaBotoes: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  botao: {
-    width: '40%',
-    paddingVertical: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  botaoAtacar: {
-    backgroundColor: '#e63946',
-  },
-  botaoCurar: {
-    backgroundColor: '#2a9d8f',
-  },
-  botaoDesativado: {
-    backgroundColor: '#3a3a3c',
-    opacity: 0.5,
-  },
-  textoBotao: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // NOVO - Estilos para a tela de fim de jogo
-  caixaFimJogo: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-  },
-  textoFimJogo: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 15,
-  },
-  botaoReiniciar: {
-    backgroundColor: '#4dadff',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
+    borderColor: palette.line,
+    padding: 22,
+    backgroundColor: "#1c1c22",
+    alignSelf: "flex-start",
+    width: "100%",
   },
 });
