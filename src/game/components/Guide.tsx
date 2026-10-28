@@ -11,22 +11,22 @@ export default function Guide() {
         [
           "01",
           "Explore",
-          "Use WASD, as setas do teclado ou o controle na tela. Árvores e o santuário bloqueiam sua passagem.",
+          "Siga a seta dourada e o ! no mapa até o objetivo. Use WASD, as setas do teclado ou o controle na tela. Perto de uma porta, pressione E ou toque na janela para entrar e sair.",
         ],
         [
           "02",
           "Enfrente",
-          "Aproxime-se do fantasma à direita do mapa e escolha enfrentar. Ataque, use uma poção ou defenda. Na resposta inimiga, mova o foguinho para desviar das brasas.",
+          "Visite Íris na cabana, vença o guardião e entre no santuário. Liberte o Lume Errante e a Sentinela do Altar; então reacenda a Primeira Brasa. A lista de objetivos muda a cada conquista.",
         ],
         [
           "03",
           "Descanse",
-          "A fogueira à esquerda restaura sua vida e repõe pelo menos 3 poções. Descanse nela para salvar.",
+          "Cada inimigo tem seu padrão: chuva vertical, ondas laterais ou pulsos radiais. Ataque, use poção ou defenda. Leia o aviso antes da esquiva e mova o foguinho. Defender reduz o dano do próximo turno.",
         ],
         [
           "04",
           "Retorne",
-          "Salve no bosque antes de sair. Vitórias também são salvas automaticamente. Use o mesmo username na próxima vez para continuar. O perfil não tem senha.",
+          "A fogueira e Íris recuperam vida e pelo menos 3 poções. Entradas, saídas, conversas, vitórias e o altar salvam automaticamente. Você também pode salvar pelo botão. Entre com o mesmo username para retomar.",
         ],
       ].map(([n, title, text]) => (
         <View key={n} style={[ui.panel, ui.row, { alignItems: "flex-start" }]}>

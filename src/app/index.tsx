@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   Pressable,
   ScrollView,
@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useGame } from "../game/store";
 import Menu from "../game/components/Menu";
 import Gameplay from "../game/components/Gameplay";
+import Controls from "../game/components/Controls";
 import Battle from "../game/components/Battle";
 import Inventory from "../game/components/Inventory";
 import Guide from "../game/components/Guide";
@@ -19,6 +20,13 @@ import WorldMap from "../game/components/WorldMap";
 import { Button, palette, ui } from "../game/components/UI";
 export default function App() {
   const g = useGame();
+  const battleMove = useRef<(x: number, y: number) => void>(() => {});
+  const registerBattleControls = useCallback(
+    (move: (x: number, y: number) => void) => {
+      battleMove.current = move;
+    },
+    [],
+  );
   const { width } = useWindowDimensions();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -83,6 +91,7 @@ export default function App() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={label}
+              disabled={g.screen === "battle"}
               accessibilityState={{ selected: g.screen === screen }}
               key={screen}
               onPress={() =>
@@ -97,7 +106,12 @@ export default function App() {
                   borderLeftColor: palette.purple,
                 },
                 hovered && { backgroundColor: "#28242e" },
-                !wide && { padding: 8, gap: 5, flex: 1, justifyContent: "center" },
+                !wide && {
+                  padding: 8,
+                  gap: 5,
+                  flex: 1,
+                  justifyContent: "center",
+                },
               ]}
             >
               <Text
@@ -112,12 +126,14 @@ export default function App() {
                 style={[
                   ui.text,
                   {
-                    fontSize: (!mounted || width < 500) ? 9 : 12,
+                    fontSize: !mounted || width < 500 ? 9 : 12,
                     color: g.screen === screen ? palette.purple : palette.muted,
                   },
                 ]}
               >
-                {(!mounted || width < 500) ? ["Início", "Jogar", "Mochila", "Guia"][i] : label}
+                {!mounted || width < 500
+                  ? ["Início", "Jogar", "Mochila", "Guia"][i]
+                  : label}
               </Text>
               {wide && (
                 <Text style={[ui.muted, { marginLeft: "auto", fontSize: 10 }]}>
@@ -139,7 +155,16 @@ export default function App() {
           )}
         </View>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, padding: wide ? 40 : (!mounted || width < 380) ? 10 : 20 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            padding: wide ? 40 : !mounted || width < 380 ? 10 : 20,
+            paddingBottom:
+              (g.screen === "world" || g.screen === "battle") &&
+              mounted &&
+              width < 700
+                ? 180
+                : 40,
+          }}
         >
           <View style={{ maxWidth: 1180, width: "100%", alignSelf: "center" }}>
             <View
@@ -149,7 +174,7 @@ export default function App() {
               ]}
             >
               <Text style={[ui.muted, { fontSize: 10 }]}>
-                O BOSQUE /{" "}
+                BRASA /{" "}
                 <Text style={{ color: palette.text }}>
                   {g.screen === "menu"
                     ? "INÍCIO"
@@ -187,7 +212,7 @@ export default function App() {
                 ) : g.screen === "world" ? (
                   <Gameplay />
                 ) : g.screen === "battle" ? (
-                  <Battle />
+                  <Battle registerControls={registerBattleControls} />
                 ) : (
                   <Inventory />
                 )}
@@ -268,6 +293,30 @@ export default function App() {
           </View>
         </ScrollView>
       </View>
+      {mounted &&
+        width < 700 &&
+        (g.screen === "world" || g.screen === "battle") &&
+        !!g.username && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: 12,
+              right: 12,
+              padding: 8,
+              backgroundColor: "#201c28f0",
+              borderWidth: 1,
+              borderColor: palette.line,
+            }}
+          >
+            <Controls
+              move={
+                g.screen === "battle"
+                  ? (x, y) => battleMove.current(x, y)
+                  : g.walk
+              }
+            />
+          </View>
+        )}
     </SafeAreaView>
   );
 }

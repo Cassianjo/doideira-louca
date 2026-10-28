@@ -13,7 +13,40 @@ export function createGameServer(
   db.exec(
     "PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS players (username TEXT PRIMARY KEY, progress TEXT NOT NULL, updated TEXT NOT NULL); CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, expires INTEGER NOT NULL);",
   );
-  const initial = { x: 7, y: 10, hp: 100, potions: 3, victories: 0, gold: 0 };
+  const initial = {
+    x: 7,
+    y: 10,
+    hp: 100,
+    potions: 3,
+    victories: 0,
+    gold: 0,
+    area: "forest",
+    metKeeper: false,
+    defeated: [],
+    completed: false,
+  };
+  const readPlayer = (username) => {
+    const player = db
+      .prepare("SELECT progress, updated FROM players WHERE username = ?")
+      .get(username);
+    const saved = JSON.parse(player.progress);
+    const progress = {
+      ...saved,
+      area: saved.area ?? "forest",
+      metKeeper: saved.metKeeper ?? false,
+      defeated: saved.defeated ?? [],
+      completed: saved.completed ?? false,
+    };
+    // Upgrade legacy JSON in place, preserving both existing values and its save timestamp.
+    const serialized = JSON.stringify(progress);
+    if (serialized !== player.progress) {
+      db.prepare("UPDATE players SET progress = ? WHERE username = ?").run(
+        serialized,
+        username,
+      );
+    }
+    return { progress, updated: player.updated };
+  };
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     const allowed = (
@@ -55,7 +88,8 @@ export function createGameServer(
         }
         try {
           body = JSON.parse(raw);
-          if (!body || typeof body !== "object" || Array.isArray(body)) return send(400, { error: "Objeto JSON esperado." });
+          if (!body || typeof body !== "object" || Array.isArray(body))
+            return send(400, { error: "Objeto JSON esperado." });
         } catch {
           return send(400, { error: "JSON inválido." });
         }
@@ -82,14 +116,7 @@ export function createGameServer(
         return send(200, {
           username,
           token,
-          ...db
-            .prepare("SELECT progress, updated FROM players WHERE username = ?")
-            .get(username),
-          progress: JSON.parse(
-            db
-              .prepare("SELECT progress FROM players WHERE username = ?")
-              .get(username).progress,
-          ),
+          ...readPlayer(username),
         });
       }
       if (path === "/api/progress") {
@@ -102,13 +129,7 @@ export function createGameServer(
         if (!session)
           return send(401, { error: "Entre novamente para salvar." });
         if (req.method === "GET") {
-          const player = db
-            .prepare("SELECT * FROM players WHERE username = ?")
-            .get(session.username);
-          return send(200, {
-            progress: JSON.parse(player.progress),
-            updated: player.updated,
-          });
+          return send(200, readPlayer(session.username));
         }
         if (req.method === "PUT") {
           const ranges = {
@@ -129,6 +150,28 @@ export function createGameServer(
               return send(400, { error: `Progresso inválido: ${key}` });
             progress[key] = body[key];
           }
+          // Missing new fields are a legacy client: preserve the player's campaign state.
+          const previous = readPlayer(session.username).progress;
+          for (const key of ["area", "metKeeper", "defeated", "completed"]) {
+            progress[key] = Object.hasOwn(body, key)
+              ? body[key]
+              : previous[key];
+          }
+          if (!["forest", "hut", "sanctuary"].includes(progress.area))
+            return send(400, { error: "Progresso inválido: area" });
+          for (const key of ["metKeeper", "completed"]) {
+            if (typeof progress[key] !== "boolean")
+              return send(400, { error: `Progresso inválido: ${key}` });
+          }
+          if (
+            !Array.isArray(progress.defeated) ||
+            progress.defeated.length > 3 ||
+            !progress.defeated.every((id) =>
+              ["guardian", "wisp", "sentinel"].includes(id),
+            ) ||
+            new Set(progress.defeated).size !== progress.defeated.length
+          )
+            return send(400, { error: "Progresso inválido: defeated" });
           const updated = new Date().toISOString();
           db.prepare(
             "UPDATE players SET progress = ?, updated = ? WHERE username = ?",

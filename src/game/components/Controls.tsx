@@ -17,6 +17,15 @@ export default function Controls({
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const handle = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey
+      )
+        return;
       const d: Record<string, number[]> = {
         ArrowUp: [0, -1],
         w: [0, -1],
@@ -27,7 +36,7 @@ export default function Controls({
         ArrowRight: [1, 0],
         d: [1, 0],
       };
-      const p = d[e.key];
+      const p = d[e.key.length === 1 ? e.key.toLowerCase() : e.key];
       if (p) {
         e.preventDefault();
         moveRef.current(p[0], p[1]);

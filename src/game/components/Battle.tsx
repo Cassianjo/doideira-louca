@@ -1,159 +1,227 @@
-import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Text, View, useWindowDimensions } from "react-native";
 import { useGame } from "../store";
+import { ENEMIES } from "../enemies";
+import { ARENA, bulletsAt, clampSoul, touchesSoul } from "../patterns";
+import type { Bullet, Point } from "../patterns";
 import Controls from "./Controls";
 import PixelSprite from "./PixelSprite";
 import { Button, palette, ui } from "./UI";
-type Bullet = { x: number; y: number };
-export default function Battle() {
+type Phase = "action" | "tell" | "dodge" | "won" | "lost";
+export default function Battle({
+  registerControls,
+}: {
+  registerControls?: (move: (x: number, y: number) => void) => void;
+}) {
+  const { width } = useWindowDimensions();
   const g = useGame();
-  const [enemy, setEnemy] = useState(90);
-  const [phase, setPhase] = useState<"action" | "dodge" | "won" | "lost">(
-    "action",
-  );
-  const [log, setLog] = useState(
-    "O guardião observa sua chama. O que você fará?",
-  );
-  const [soul, setSoul] = useState({ x: 140, y: 100 });
+  const foe = ENEMIES[g.encounter];
+  const [enemyHp, setEnemyHp] = useState(foe.maxHp);
+  const [phase, setPhase] = useState<Phase>("action");
+  const phaseRef = useRef<Phase>("action");
+  const [log, setLog] = useState(foe.description);
+  const [soul, setSoul] = useState<Point>({ x: ARENA.width / 2, y: 150 });
   const soulRef = useRef(soul);
   const [bullets, setBullets] = useState<Bullet[]>([]);
-  const round = useRef(0);
-  const lastHit = useRef(0);
-  const damage = useRef(6);
+  const [remaining, setRemaining] = useState<number>(ARENA.duration);
+  const [invulnerable, setInvulnerable] = useState(false);
+  const [round, setRound] = useState(1);
+  const defended = useRef(false);
   const progress = useGame((s) => s.progress);
-  const move = (dx: number, dy: number) => {
-    if (phase !== "dodge") return;
-    const next = {
-      x: Math.max(8, Math.min(270, soulRef.current.x + dx * 12)),
-      y: Math.max(8, Math.min(170, soulRef.current.y + dy * 12)),
-    };
+  const transition = (next: Phase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  };
+  const move = useCallback((dx: number, dy: number) => {
+    if (phaseRef.current !== "dodge" && phaseRef.current !== "tell") return;
+    const next = clampSoul({
+      x: soulRef.current.x + dx * 12,
+      y: soulRef.current.y + dy * 12,
+    });
     soulRef.current = next;
     setSoul(next);
-  };
+  }, []);
+  useEffect(() => {
+    registerControls?.(move);
+    return () => registerControls?.(() => {});
+  }, [registerControls, move]);
+  useEffect(() => {
+    if (phase !== "tell") return;
+    const timer = setTimeout(() => {
+      transition("dodge");
+      setLog("Desvie com as setas, WASD ou o controle.");
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [phase]);
   useEffect(() => {
     if (phase !== "dodge") return;
-    let tick = 0;
-    let active: Bullet[] = [];
-    lastHit.current = 0;
+    let elapsed = 0,
+      lastHit = -1000,
+      lastFrame = Date.now();
     const timer = setInterval(() => {
-      tick++;
-      if (tick % 5 === 0) {
-        const lane = (tick * 37 + round.current * 41) % 268;
-        active.push({ x: lane, y: -10 });
-      }
-      active = active
-        .map((b) => ({ ...b, y: b.y + 5 }))
-        .filter((b) => b.y < 190);
-      const s = soulRef.current;
-      if (
-        tick - lastHit.current > 10 &&
-        active.some((b) => Math.abs(b.x - s.x) < 13 && Math.abs(b.y - s.y) < 13)
-      ) {
-        lastHit.current = tick;
-        const hp = Math.max(0, useGame.getState().progress.hp - damage.current);
+      const now = Date.now();
+      // A backgrounded tab cannot jump through the whole enemy turn.
+      elapsed += Math.min(100, Math.max(0, now - lastFrame));
+      lastFrame = now;
+      const active = bulletsAt(foe.pattern, elapsed, round);
+      if (elapsed - lastHit >= 700 && touchesSoul(soulRef.current, active)) {
+        lastHit = elapsed;
+        const hp = Math.max(
+          0,
+          useGame.getState().progress.hp -
+            (defended.current ? Math.ceil(foe.damage / 2) : foe.damage),
+        );
         g.change({ hp });
         if (hp === 0) {
-          setPhase("lost");
-          setLog("A chama se apagou… mas ainda há uma nova chance.");
+          setBullets([]);
+          transition("lost");
+          setLog("A chama se apagou… a fogueira te dará uma nova chance.");
           return;
         }
       }
-      setBullets([...active]);
-      if (tick >= 100) {
-        setPhase("action");
+      setInvulnerable(elapsed - lastHit < 700);
+      setBullets(active);
+      setRemaining(Math.max(0, ARENA.duration - elapsed));
+      if (elapsed >= ARENA.duration) {
+        transition("action");
         setBullets([]);
-        setLog("Você resistiu. É a sua vez!");
+        setInvulnerable(false);
+        setRound((r) => r + 1);
+        setLog("Você resistiu. Escolha sua próxima ação.");
       }
-    }, 50);
+    }, 40);
     return () => clearInterval(timer);
-  }, [phase]);
+  }, [phase, foe, round]);
   const act = (kind: "attack" | "heal" | "defend") => {
-    if (phase !== "action") return;
-    if (kind === "heal" && progress.potions === 0) {
-      setLog("Você está sem poções.");
+    if (phaseRef.current !== "action") return;
+    const current = useGame.getState().progress;
+    if (kind === "heal" && current.potions === 0) {
+      setLog("Sem poções. A fogueira pode reabastecer você.");
       return;
     }
-    damage.current = kind === "defend" ? 3 : 6;
+    defended.current = kind === "defend";
     if (kind === "attack") {
-      const hp = Math.max(0, enemy - 23);
-      setEnemy(hp);
-      if (!hp) {
-        setPhase("won");
-        g.change({
-          victories: progress.victories + 1,
-          gold: progress.gold + 35,
-        });
+      const hp = Math.max(0, enemyHp - 23);
+      setEnemyHp(hp);
+      if (hp === 0) {
+        transition("won");
         setLog(
-          "O guardião encontrou paz. +35 ouro. Sua chama ficou mais forte.",
+          `${foe.name} cedeu à sua chama. +${foe.reward} ouro. Siga a seta para o próximo objetivo.`,
         );
-        void g.save();
+        g.winBattle(foe.id);
         return;
       }
     }
     if (kind === "heal")
       g.change({
-        hp: Math.min(100, progress.hp + 35),
-        potions: progress.potions - 1,
+        hp: Math.min(100, current.hp + 35),
+        potions: current.potions - 1,
       });
-    round.current++;
-    setPhase("dodge");
+    setRemaining(ARENA.duration);
+    setBullets([]);
+    transition("tell");
     setLog(
-      kind === "defend"
-        ? "Defesa ativa: dano reduzido. Desvie por 5 segundos!"
-        : "Mova o foguinho e desvie das brasas por 5 segundos!",
+      `${defended.current ? "Defesa ativa: dano pela metade. " : ""}${foe.tell}`,
     );
   };
+  const active = phase === "dodge" || phase === "tell";
   return (
-    <View style={{ gap: 20 }}>
-      <Text style={ui.label}>ENCONTRO · TURNO {round.current + 1}</Text>
-      <Text style={ui.title}>O Guardião Esquecido</Text>
+    <View style={{ gap: 18 }}>
+      <Text style={ui.label}>
+        ENCONTRO · TURNO {round} ·{" "}
+        {phase === "tell"
+          ? "PREPARE-SE"
+          : phase === "dodge"
+            ? "ESQUIVE"
+            : "SUA VEZ"}
+      </Text>
+      <Text style={ui.title}>{foe.name}</Text>
       <View
         style={[
           ui.panel,
-          { alignItems: "center", gap: 16, paddingVertical: 30 },
+          { alignItems: "center", gap: 12, paddingVertical: 22 },
         ]}
       >
-        <PixelSprite kind="ghost" size={9} />
-        <Text style={ui.muted}>GUARDIÃO {enemy} / 90</Text>
+        <PixelSprite kind={foe.kind} size={7} />
+        <Text style={ui.muted}>
+          VIDA DO INIMIGO {enemyHp} / {foe.maxHp}
+        </Text>
         <View style={{ height: 5, width: 200, backgroundColor: palette.line }}>
           <View
             style={{
               height: 5,
-              width: `${(enemy / 90) * 100}%`,
-              backgroundColor: palette.gold,
+              width: `${(enemyHp / foe.maxHp) * 100}%`,
+              backgroundColor: foe.color,
             }}
           />
         </View>
       </View>
-      <View style={{ alignItems: "center", gap: 16 }}>
+      <View style={{ alignItems: "center", gap: 12 }}>
         <View
+          accessibilityLabel={`Arena de esquiva: ${foe.name}`}
           style={{
-            width: 300,
-            height: 200,
+            width: ARENA.width + 6,
+            height: ARENA.height + 6,
             borderWidth: 3,
-            borderColor: phase === "dodge" ? palette.gold : palette.line,
+            borderColor: active ? foe.color : palette.line,
             backgroundColor: "#111116",
             overflow: "hidden",
           }}
         >
-          {phase === "dodge" ? (
+          {active ? (
             <>
-              <View style={{ position: "absolute", left: soul.x, top: soul.y }}>
-                <PixelSprite kind="flame" size={2} />
-              </View>
-              {bullets.map((b, i) => (
+              {foe.pattern === "radial" && (
                 <View
-                  key={i}
                   style={{
                     position: "absolute",
-                    left: b.x,
-                    top: b.y,
-                    width: 7,
-                    height: 12,
-                    backgroundColor: "#cab7e5",
+                    left: ARENA.width / 2 - 10,
+                    top: ARENA.height / 2 - 10,
+                    width: 20,
+                    height: 20,
+                    borderWidth: 1,
+                    borderColor: foe.color,
+                    opacity: 0.5,
+                  }}
+                />
+              )}
+              {phase === "tell" && (
+                <Text
+                  style={[
+                    ui.label,
+                    {
+                      position: "absolute",
+                      top: 20,
+                      alignSelf: "center",
+                      color: foe.color,
+                    },
+                  ]}
+                >
+                  ! PREPARE-SE !
+                </Text>
+              )}
+              {bullets.map((b) => (
+                <View
+                  key={b.id}
+                  style={{
+                    position: "absolute",
+                    left: b.x - b.radius,
+                    top: b.y - b.radius,
+                    width: b.radius * 2,
+                    height: b.radius * 2,
+                    backgroundColor: foe.color,
                   }}
                 />
               ))}
+              <View
+                style={{
+                  position: "absolute",
+                  left: soul.x - 9,
+                  top: soul.y - 10,
+                  opacity: invulnerable ? 0.45 : 1,
+                }}
+              >
+                <PixelSprite kind="flame" size={2} />
+              </View>
             </>
           ) : (
             <View
@@ -161,7 +229,7 @@ export default function Battle() {
                 flex: 1,
                 alignItems: "center",
                 justifyContent: "center",
-                padding: 20,
+                padding: 18,
                 gap: 12,
               }}
             >
@@ -170,12 +238,19 @@ export default function Battle() {
                 {phase === "won"
                   ? "VITÓRIA"
                   : phase === "lost"
-                    ? "A JORNADA CONTINUA"
-                    : "Sua chama permanece acesa."}
+                    ? "SUA CHAMA PODE RENASCER"
+                    : "Escolha uma ação para começar o turno."}
               </Text>
             </View>
           )}
         </View>
+        {active && (
+          <Text style={[ui.label, { color: foe.color }]}>
+            {phase === "tell"
+              ? "POSICIONE SUA CHAMA"
+              : `RESISTA POR ${(remaining / 1000).toFixed(1)}s`}
+          </Text>
+        )}
         <Text
           accessibilityLiveRegion="polite"
           style={[ui.text, { textAlign: "center", lineHeight: 22 }]}
@@ -196,20 +271,22 @@ export default function Battle() {
           <Text accessibilityRole="alert" style={ui.muted}>
             {g.saving ? "Salvando sua vitória…" : g.message}
           </Text>
-          {!g.saving && g.message && !g.message.startsWith("Progresso salvo") && (
-            <Button onPress={() => void g.save()}>Tentar salvar novamente</Button>
-          )}
+          {!g.saving &&
+            g.message &&
+            !g.message.startsWith("Progresso salvo") && (
+              <Button onPress={() => void g.save()}>
+                Tentar salvar novamente
+              </Button>
+            )}
         </View>
       )}
       {phase === "won" || phase === "lost" ? (
         <Button
           primary
-          onPress={() => {
-            if (phase === "lost") g.change({ hp: 100, x: 7, y: 10 });
-            g.go("world");
-          }}
+          disabled={g.saving}
+          onPress={() => g.retreatBattle(phase === "lost")}
         >
-          Voltar ao bosque
+          {phase === "lost" ? "Renascer na fogueira" : "Continuar aventura →"}
         </Button>
       ) : (
         <>
@@ -219,7 +296,7 @@ export default function Battle() {
               ["heal", "✚ Poção"],
               ["defend", "◇ Defender"],
             ].map(([action, label]) => (
-              <View key={action} style={{ flex: 1, minWidth: 90 }}>
+              <View key={action} style={{ flex: 1, minWidth: 82 }}>
                 <Button
                   disabled={
                     phase !== "action" ||
@@ -232,9 +309,9 @@ export default function Battle() {
               </View>
             ))}
           </View>
-          <Controls move={move} />
-          <Button disabled={phase === "dodge"} onPress={() => g.go("world")}>
-            Fugir para o bosque
+          {width >= 700 && <Controls move={move} />}
+          <Button disabled={active} onPress={() => g.retreatBattle()}>
+            Recuar
           </Button>
         </>
       )}
